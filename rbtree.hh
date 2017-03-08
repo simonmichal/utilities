@@ -11,6 +11,20 @@
 #include <memory>
 #include <string>
 #include <iostream>
+#include <exception>
+
+class rb_invariant_error : public std::exception
+{
+  public:
+
+    rb_invariant_error() {}
+
+    virtual const char* what() const throw()
+    {
+      return "Red-black tree invariant violation!";
+    }
+
+};
 
 template<typename K, typename V>
 class rbtree
@@ -54,6 +68,46 @@ class rbtree
       accessor_proxy( node_t *node ) : key( node->key ), value( node->value ) { }
       const K &key;
       V &value;
+    };
+
+    // this class is just used in rb_erase_case# methods as
+    // they need to accept a leaf (null) node as a parameter
+    // that can return its parent
+    struct leaf_node_t
+    {
+        leaf_node_t( node_t *parent ) : colour( BLACK ), parent( parent ) { }
+
+        leaf_node_t( const leaf_node_t &leaf ) : colour( leaf.colour ), parent( leaf.parent ) { }
+
+        leaf_node_t& operator=( const leaf_node_t &leaf )
+        {
+          colour = leaf.colour;
+          parent = leaf.parent;
+          return *this;
+        }
+
+        leaf_node_t* operator->()
+        {
+          return this;
+        }
+
+        leaf_node_t& operator*()
+        {
+          return *this;
+        }
+
+        operator bool() const
+        {
+          return true;
+        }
+
+        bool operator==( node_t *node ) const
+        {
+          return node == nullptr;
+        }
+
+        colour_t colour;
+        node_t *parent;
     };
 
   public:
@@ -200,14 +254,6 @@ class rbtree
     {
       if( !node ) return;
 
-      if( is_leaf( node.get() ) )
-      {
-        // in this case just erase the node
-        node.reset();
-        --tree_size;
-        return;
-      }
-
       if( has_two( node.get() ) )
       {
         // in this case:
@@ -220,12 +266,35 @@ class rbtree
         return;
       }
 
-      // has one child
-      // in this case simply replace the node with the single child
+      // node has at most one child
+      // in this case simply replace the node with the
+      // single child or null if there are no children
+      node_t *parent = node->parent;
       std::unique_ptr<node_t> &child = node->left ? node->left : node->right;
-      child->parent = node->parent;
+      colour_t old_colour = node->colour;
+      if( child ) child->parent = node->parent;
       node.reset( child.release() );
       --tree_size;
+      if( old_colour == BLACK)
+      {
+        if( node && node->colour == RED )
+          node->colour = BLACK;
+        else
+        {
+          // if we are here the node is null because a BLACK
+          // node that has at most one non-leaf child must
+          // have two null children (null children are BLACK)
+          if( node ) throw rb_invariant_error();
+          rb_erase_case1( leaf_node_t( parent ) );
+        }
+      }
+      else if( node )
+        // if the node was red it has to have two BLACK children
+        // and since at most one of those children is a non-leaf
+        // child actually both have to be leafs (null) in order
+        // to satisfy the red-black tree invariant
+        throw rb_invariant_error();
+
     }
 
     template<typename PTR> // make it a template so it works both for constant and mutable pointers
@@ -256,11 +325,6 @@ class rbtree
     {
       if( !node ) return null_node;
       return find_min( node->right );
-    }
-
-    static bool is_leaf( const node_t *node )
-    {
-      return !node->left && !node->right;
     }
 
     static bool has_two( const node_t *node )
@@ -403,6 +467,136 @@ class rbtree
     }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    template<typename NODE>
+    static bool is_left( NODE node )
+    {
+      return node == node->parent->left.get();
+    }
+
+    template<typename NODE>
+    static bool is_right( NODE node )
+    {
+      return node == node->parent->right.get();
+    }
+
+    template<typename NODE>
+    node_t* get_sibling( NODE node )
+    {
+      if( !node && !node->parent )
+        return nullptr;
+      if( is_left( node ) )
+        return node->parent->right.get();
+      else
+        return node->parent->left.get();
+    }
+
+    template<typename NODE>
+    void rb_erase_case1( NODE node )
+    {
+      if( node->parent != nullptr )
+        rb_erase_case2( node );
+    }
+
+    template<typename NODE>
+    void rb_erase_case2( NODE node )
+    {
+      node_t *sibling = get_sibling( node );
+      if( sibling->colour == RED )
+      {
+        node->parent->colour = RED;
+        sibling->colour = BLACK;
+        if( is_left( node ) )
+          left_rotation( node->parent );
+        else
+          right_rotation( node->parent );
+      }
+
+      rb_erase_case3( node );
+    }
+
+    template<typename NODE>
+    void rb_erase_case3( NODE node )
+    {
+      node_t *sibling = get_sibling( node );
+      colour_t sibling_left_colour = sibling->left ? sibling->left->colour : BLACK;
+      colour_t sibling_right_colour = sibling->right ? sibling->right->colour : BLACK;
+      if( node->parent->colour == BLACK &&
+          sibling->colour == BLACK &&
+          sibling_left_colour == BLACK &&
+          sibling_right_colour == BLACK )
+      {
+        sibling->colour = RED;
+        rb_erase_case1( node->parent );
+      }
+      else
+        rb_erase_case4( node );
+    }
+
+    template<typename NODE>
+    void rb_erase_case4( NODE node )
+    {
+      node_t *sibling = get_sibling( node );
+      colour_t sibling_left_colour = sibling->left ? sibling->left->colour : BLACK;
+      colour_t sibling_right_colour = sibling->right ? sibling->right->colour : BLACK;
+      if( node->parent->colour == RED &&
+          sibling->colour == BLACK &&
+          sibling_left_colour == BLACK &&
+          sibling_right_colour == BLACK )
+      {
+        sibling->colour = RED;
+        node->parent->colour = BLACK;
+      }
+      else
+        rb_erase_case5( node );
+    }
+
+    template<typename NODE>
+    void rb_erase_case5( NODE node )
+    {
+      node_t *sibling = get_sibling( node );
+      colour_t sibling_left_colour = sibling->left ? sibling->left->colour : BLACK;
+      colour_t sibling_right_colour = sibling->right ? sibling->right->colour : BLACK;
+      if( sibling->colour == BLACK )
+      {
+        if( is_left( node ) &&
+            sibling_right_colour == BLACK &&
+            sibling_left_colour == RED )
+        {
+          sibling->colour = RED;
+          if( sibling->left ) sibling->left->colour = BLACK;
+          right_rotation( sibling );
+        }
+        else if( is_right( node ) &&
+                 sibling_left_colour == BLACK &&
+                 sibling_right_colour == RED )
+        {
+          sibling->colour = RED;
+          if( sibling->right ) sibling->right->colour = BLACK;
+          left_rotation( sibling );
+        }
+      }
+
+      rb_erase_case6( node );
+    }
+
+    template<typename NODE>
+    void rb_erase_case6( NODE node )
+    {
+      node_t *sibling = get_sibling( node );
+      sibling->colour = node->parent->colour;
+      node->parent->colour = BLACK;
+      if( is_left( node ) )
+      {
+        if( sibling->right ) sibling->right->colour = BLACK;
+        left_rotation( node->parent );
+      }
+      else
+      {
+        if( sibling->left ) sibling->left->colour = BLACK;
+        right_rotation( node->parent );
+      }
+    }
 
     std::unique_ptr<node_t> tree_root;
     size_t tree_size;
