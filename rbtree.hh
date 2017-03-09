@@ -9,9 +9,8 @@
 #define RBTREE_HH_
 
 #include <memory>
-#include <string>
-#include <iostream>
 #include <exception>
+#include <iostream>
 
 class rb_invariant_error : public std::exception
 {
@@ -29,6 +28,8 @@ class rb_invariant_error : public std::exception
 template<typename K, typename V>
 class rbtree
 {
+    friend class rbtree_tester;
+
   private:
 
     enum colour_t
@@ -37,23 +38,35 @@ class rbtree
       BLACK = false
     };
 
-    struct node_t
+    class node_t
     {
-      node_t( const K &key, const V &value ) : key( key ), value( value ), colour( RED ), parent( nullptr ) { }
+      friend class rbtree;
+      friend class rbtree_tester;
 
-      void swap( node_t *node )
-      {
-        std::swap( key, node->key );
-        std::swap( value, node->value );
-      }
+      public:
+        node_t( const K &key, const V &value ) : key( key ), value( value ), colour( RED ), parent( nullptr ) { }
 
-      K key;
-      V value;
-      colour_t colour;
-      node_t* parent;
+        const K key;
+        V value;
 
-      std::unique_ptr<node_t> left;
-      std::unique_ptr<node_t> right;
+        void print()
+        {
+          std::cout << std::endl;
+          std::cout << "key: " << key << std::endl;
+          if( parent ) std::cout << "parent key: " << parent->key << std::endl;
+          else std::cout << "I'm root" << std::endl;
+          if( left ) std::cout << "left key: " << left->key << std::endl;
+          else std::cout << "Left is a leaf" << std::endl;
+          if( right ) std::cout << "right key: " << right->key << std::endl;
+          else std::cout << "Right is a leaf" << std::endl;
+        }
+
+      private:
+        colour_t colour;
+        node_t* parent;
+
+        std::unique_ptr<node_t> left;
+        std::unique_ptr<node_t> right;
     };
 
     static std::unique_ptr<node_t> make_node( const K &key, const V &value )
@@ -61,17 +74,58 @@ class rbtree
       return std::unique_ptr<node_t>( new node_t( key, value ) );
     }
 
+    static void swap_right_child( std::unique_ptr<node_t> &node, std::unique_ptr<node_t> &successor )
+    {
+      std::swap( node->colour, successor->colour );
+      // first do the obvious
+      std::swap( node->left, successor->left );
+      if( node->left ) node->left->parent = node.get();
+      if( successor->left ) successor->left->parent = successor.get();
+      // now gather remaining pointers
+      node_t *p = node->parent;
+      node_t *n = node.release();
+      node_t *s = successor.release();
+      node_t *s_right = s->right.release();
+      // and finally reassign those pointers
+      s->parent = p;
+      node.reset( s );
+      s->right.reset( n );
+      n->parent = s;
+      n->right.reset( s_right );
+      if( s_right ) s_right->parent = n;
+    }
+
+    static void swap_successor( std::unique_ptr<node_t> &node, std::unique_ptr<node_t> &successor )
+    {
+      // first check if successor is a direct child of node,
+      // since it is the in-order successor it can be only
+      // the right child
+
+      if( node->right.get() == successor.get() )
+      {
+        // it is the right child
+        swap_right_child( node, successor );
+        return;
+      }
+      // swap colour
+      std::swap( node->colour, successor->colour );
+      // swap parents
+      std::swap( node, successor );
+      std::swap( node->parent, successor->parent );
+      // swap left
+      std::swap( node->left, successor->left );
+      if( node->left ) node->left->parent = node.get();
+      if( successor->left ) successor->left->parent = successor.get();
+      // swap right
+      std::swap( node->right, successor->right );
+      if( node->right ) node->right->parent = node.get();
+      if( successor->right ) successor->right->parent = successor.get();
+    }
+
     static std::unique_ptr<node_t> null_node;
 
-    struct accessor_proxy
-    {
-      accessor_proxy( node_t *node ) : key( node->key ), value( node->value ) { }
-      const K &key;
-      V &value;
-    };
-
     // this class is just used in rb_erase_case# methods as
-    // they need to accept a leaf (null) node as a parameter
+    // they need to accept a leaf (null) node as an argument
     // that can return its parent
     struct leaf_node_t
     {
@@ -107,50 +161,35 @@ class rbtree
         }
 
         colour_t colour;
-        node_t *parent;
+        node_t  *parent;
     };
 
   public:
-
-    void print()
-    {
-      print( tree_root );
-    }
-
-    void print( const std::unique_ptr<node_t> &root, const std::string &indent = "" )
-    {
-      if( !root ) return;
-
-      print( root->right, indent + "  " );
-      std::string colour = root->colour ? "(R)" : "(B)";
-      std::cout << indent << root->key << colour << std::endl;
-      print( root->left, indent + "  " );
-    }
 
     class accessor
     {
       public:
 
-        accessor( node_t *node ) : proxy( node ? new accessor_proxy( node ) : nullptr ) { }
+        accessor( node_t *node ) : node( node ) { }
 
-        accessor_proxy* operator->()
+        node_t* operator->()
         {
-          return proxy.get();
+          return node;
         }
 
-        accessor_proxy& operator*()
+        node_t& operator*()
         {
-          return *proxy.get();
+          return *node;
         }
 
         operator bool() const
         {
-          return bool( proxy );
+          return bool( node );
         }
 
       private:
 
-        std::unique_ptr<accessor_proxy> proxy;
+        node_t *node;
     };
 
     rbtree() : tree_size( 0 ) { }
@@ -195,40 +234,7 @@ class rbtree
       return !tree_root;
     }
 
-    bool test_invariant()
-    {
-      return test_tree_invariant( tree_root ).first;
-    }
-
-  private:
-
-    static std::pair<bool, int> test_tree_invariant( const std::unique_ptr<node_t> &root )
-    {
-      // base case
-      if( !root )
-        return std::make_pair( true, 0 );
-
-      int black = 0;
-      if( root->colour == RED )
-      {
-        // RED node cannot have RED children
-        if( ( root->left && root->left->colour == RED ) || ( root->right && root->right->colour == RED ) )
-          return std::make_pair( false, -1 );
-      }
-      else
-        black += 1;
-
-      std::pair<bool, int> l = test_tree_invariant( root->left );
-      std::pair<bool, int> r = test_tree_invariant( root->right );
-
-      if( !l.first || !r.first )
-        return std::make_pair( false, -1 );
-
-      if( l.second != r.second )
-        return std::make_pair( false, -1 );
-
-      return std::make_pair( true, l.second + black );
-    }
+   private:
 
     void insert_into( const K &key, const V &value, std::unique_ptr<node_t> &node, node_t *parent = nullptr )
     {
@@ -261,7 +267,7 @@ class rbtree
         // 2. replace the node with the in-order successor
         // 3. erase the in-order successor
         std::unique_ptr<node_t> &successor = find_successor( node );
-        node->swap( successor.get() );
+        swap_successor( node, successor );
         erase_node( successor );
         return;
       }
@@ -502,6 +508,7 @@ class rbtree
     void rb_erase_case2( NODE node )
     {
       node_t *sibling = get_sibling( node );
+      if( !sibling ) throw rb_invariant_error();
       if( sibling->colour == RED )
       {
         node->parent->colour = RED;
@@ -519,6 +526,7 @@ class rbtree
     void rb_erase_case3( NODE node )
     {
       node_t *sibling = get_sibling( node );
+      if( !sibling ) throw rb_invariant_error();
       colour_t sibling_left_colour = sibling->left ? sibling->left->colour : BLACK;
       colour_t sibling_right_colour = sibling->right ? sibling->right->colour : BLACK;
       if( node->parent->colour == BLACK &&
@@ -537,6 +545,7 @@ class rbtree
     void rb_erase_case4( NODE node )
     {
       node_t *sibling = get_sibling( node );
+      if( !sibling ) throw rb_invariant_error();
       colour_t sibling_left_colour = sibling->left ? sibling->left->colour : BLACK;
       colour_t sibling_right_colour = sibling->right ? sibling->right->colour : BLACK;
       if( node->parent->colour == RED &&
@@ -555,6 +564,7 @@ class rbtree
     void rb_erase_case5( NODE node )
     {
       node_t *sibling = get_sibling( node );
+      if( !sibling ) throw rb_invariant_error();
       colour_t sibling_left_colour = sibling->left ? sibling->left->colour : BLACK;
       colour_t sibling_right_colour = sibling->right ? sibling->right->colour : BLACK;
       if( sibling->colour == BLACK )
@@ -584,6 +594,7 @@ class rbtree
     void rb_erase_case6( NODE node )
     {
       node_t *sibling = get_sibling( node );
+      if( !sibling ) throw rb_invariant_error();
       sibling->colour = node->parent->colour;
       node->parent->colour = BLACK;
       if( is_left( node ) )
