@@ -10,7 +10,6 @@
 
 #include <memory>
 #include <exception>
-#include <iostream>
 
 class rb_invariant_error : public std::exception
 {
@@ -25,56 +24,46 @@ class rb_invariant_error : public std::exception
 
 };
 
+enum colour_t
+{
+  RED = true,
+  BLACK = false
+};
+
 template<typename K, typename V>
+class node_t
+{
+  template<typename, typename, typename> friend class rbtree;
+  friend class rbtree_tester;
+
+  public:
+    node_t( const K &key, const V &value ) : key( key ), value( value ), colour( RED ), parent( nullptr ) { }
+
+    const K key;
+    V value;
+
+  private:
+    colour_t colour;
+    node_t* parent;
+
+    std::unique_ptr<node_t> left;
+    std::unique_ptr<node_t> right;
+};
+
+template<typename K, typename V, typename N = node_t<K, V> >
 class rbtree
 {
     friend class rbtree_tester;
+    friend class interval_tree_tester;
 
-  private:
+  protected:
 
-    enum colour_t
+    static std::unique_ptr<N> make_node( const K &key, const V &value )
     {
-      RED = true,
-      BLACK = false
-    };
-
-    class node_t
-    {
-      friend class rbtree;
-      friend class rbtree_tester;
-
-      public:
-        node_t( const K &key, const V &value ) : key( key ), value( value ), colour( RED ), parent( nullptr ) { }
-
-        const K key;
-        V value;
-
-        void print()
-        {
-          std::cout << std::endl;
-          std::cout << "key: " << key << std::endl;
-          if( parent ) std::cout << "parent key: " << parent->key << std::endl;
-          else std::cout << "I'm root" << std::endl;
-          if( left ) std::cout << "left key: " << left->key << std::endl;
-          else std::cout << "Left is a leaf" << std::endl;
-          if( right ) std::cout << "right key: " << right->key << std::endl;
-          else std::cout << "Right is a leaf" << std::endl;
-        }
-
-      private:
-        colour_t colour;
-        node_t* parent;
-
-        std::unique_ptr<node_t> left;
-        std::unique_ptr<node_t> right;
-    };
-
-    static std::unique_ptr<node_t> make_node( const K &key, const V &value )
-    {
-      return std::unique_ptr<node_t>( new node_t( key, value ) );
+      return std::unique_ptr<N>( new N( key, value ) );
     }
 
-    static void swap_right_child( std::unique_ptr<node_t> &node, std::unique_ptr<node_t> &successor )
+    static void swap_right_child( std::unique_ptr<N> &node, std::unique_ptr<N> &successor )
     {
       std::swap( node->colour, successor->colour );
       // first do the obvious
@@ -82,10 +71,10 @@ class rbtree
       if( node->left ) node->left->parent = node.get();
       if( successor->left ) successor->left->parent = successor.get();
       // now gather remaining pointers
-      node_t *p = node->parent;
-      node_t *n = node.release();
-      node_t *s = successor.release();
-      node_t *s_right = s->right.release();
+      N *p = node->parent;
+      N *n = node.release();
+      N *s = successor.release();
+      N *s_right = s->right.release();
       // and finally reassign those pointers
       s->parent = p;
       node.reset( s );
@@ -95,7 +84,7 @@ class rbtree
       if( s_right ) s_right->parent = n;
     }
 
-    static void swap_successor( std::unique_ptr<node_t> &node, std::unique_ptr<node_t> &successor )
+    static void swap_successor( std::unique_ptr<N> &node, std::unique_ptr<N> &successor )
     {
       // first check if successor is a direct child of node,
       // since it is the in-order successor it can be only
@@ -122,14 +111,14 @@ class rbtree
       if( successor->right ) successor->right->parent = successor.get();
     }
 
-    static std::unique_ptr<node_t> null_node;
+    static std::unique_ptr<N> null_node;
 
     // this class is just used in rb_erase_case# methods as
     // they need to accept a leaf (null) node as an argument
-    // that can return its parent
+    // that can return its parent and is BLACK
     struct leaf_node_t
     {
-        leaf_node_t( node_t *parent ) : colour( BLACK ), parent( parent ) { }
+        leaf_node_t( N *parent ) : colour( BLACK ), parent( parent ) { }
 
         leaf_node_t( const leaf_node_t &leaf ) : colour( leaf.colour ), parent( leaf.parent ) { }
 
@@ -155,13 +144,13 @@ class rbtree
           return true;
         }
 
-        bool operator==( node_t *node ) const
+        bool operator==( N *node ) const
         {
           return node == nullptr;
         }
 
         colour_t colour;
-        node_t  *parent;
+        N *parent;
     };
 
   public:
@@ -170,14 +159,14 @@ class rbtree
     {
       public:
 
-        accessor( node_t *node ) : node( node ) { }
+        accessor( N *node ) : node( node ) { }
 
-        node_t* operator->()
+        N* operator->()
         {
           return node;
         }
 
-        node_t& operator*()
+        N& operator*()
         {
           return *node;
         }
@@ -189,7 +178,7 @@ class rbtree
 
       private:
 
-        node_t *node;
+        N *node;
     };
 
     rbtree() : tree_size( 0 ) { }
@@ -203,7 +192,7 @@ class rbtree
 
     void erase( const K &key )
     {
-      std::unique_ptr<node_t> &node = find_in( key, tree_root );
+      std::unique_ptr<N> &node = find_in( key, tree_root );
       erase_node( node );
     }
 
@@ -214,13 +203,13 @@ class rbtree
 
     accessor find( const K &key )
     {
-      const std::unique_ptr<node_t> &n = find_in( key, tree_root );
+      const std::unique_ptr<N> &n = find_in( key, tree_root );
       return accessor( n.get() );
     }
 
     const accessor find( const K &key ) const
     {
-      const std::unique_ptr<node_t> &n = find_in( key, tree_root );
+      const std::unique_ptr<N> &n = find_in( key, tree_root );
       return accessor( n.get() );
     }
 
@@ -234,9 +223,9 @@ class rbtree
       return !tree_root;
     }
 
-   private:
+  protected:
 
-    void insert_into( const K &key, const V &value, std::unique_ptr<node_t> &node, node_t *parent = nullptr )
+    void insert_into( const K &key, const V &value, std::unique_ptr<N> &node, N *parent = nullptr )
     {
       if( !node )
       {
@@ -256,7 +245,7 @@ class rbtree
         insert_into( key, value, node->right, node.get() );
     }
 
-    void erase_node( std::unique_ptr<node_t> &node )
+    void erase_node( std::unique_ptr<N> &node )
     {
       if( !node ) return;
 
@@ -266,7 +255,7 @@ class rbtree
         // 1. look for the in-order successor
         // 2. replace the node with the in-order successor
         // 3. erase the in-order successor
-        std::unique_ptr<node_t> &successor = find_successor( node );
+        std::unique_ptr<N> &successor = find_successor( node );
         swap_successor( node, successor );
         erase_node( successor );
         return;
@@ -275,8 +264,8 @@ class rbtree
       // node has at most one child
       // in this case simply replace the node with the
       // single child or null if there are no children
-      node_t *parent = node->parent;
-      std::unique_ptr<node_t> &child = node->left ? node->left : node->right;
+      N *parent = node->parent;
+      std::unique_ptr<N> &child = node->left ? node->left : node->right;
       colour_t old_colour = node->colour;
       if( child ) child->parent = node->parent;
       node.reset( child.release() );
@@ -300,7 +289,6 @@ class rbtree
         // child actually both have to be leafs (null) in order
         // to satisfy the red-black tree invariant
         throw rb_invariant_error();
-
     }
 
     template<typename PTR> // make it a template so it works both for constant and mutable pointers
@@ -333,25 +321,25 @@ class rbtree
       return find_min( node->right );
     }
 
-    static bool has_two( const node_t *node )
+    static bool has_two( const N *node )
     {
       return node->left && node->right;
     }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    static void replace( std::unique_ptr<node_t> &ptr, node_t *node )
+    static void replace( std::unique_ptr<N> &ptr, N *node )
     {
       ptr.release();
       ptr.reset( node );
     }
 
-    void right_rotation( node_t *node )
+    virtual void right_rotation( N *node )
     {
       if( !node ) return;
 
-      node_t *parent = node->parent;
-      node_t *left_child = node->left.release();
+      N *parent = node->parent;
+      N *left_child = node->left.release();
 
       bool is_left = ( parent && parent->left.get() == node ) ? true : false;
 
@@ -370,12 +358,12 @@ class rbtree
         replace( parent->right, left_child );
     }
 
-    void left_rotation( node_t *node )
+    virtual void left_rotation( N *node )
     {
       if( !node ) return;
 
-      node_t *parent = node->parent;
-      node_t *right_child = node->right.release();
+      N *parent = node->parent;
+      N *right_child = node->right.release();
 
       bool is_left = ( parent && parent->left.get() == node ) ? true : false;
 
@@ -396,15 +384,15 @@ class rbtree
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    node_t* get_grandparent( node_t *node )
+    N* get_grandparent( N *node )
     {
       if( !node || !node->parent ) return nullptr;
       return node->parent->parent;
     }
 
-    node_t* get_uncle( node_t *node )
+    N* get_uncle( N *node )
     {
-      node_t *grandparent = get_grandparent( node );
+      N *grandparent = get_grandparent( node );
       if( !grandparent ) return nullptr;
       if( grandparent->left.get() == node->parent )
         return grandparent->right.get();
@@ -412,7 +400,7 @@ class rbtree
         return grandparent->left.get();
     }
 
-    void rb_insert_case1( node_t *node )
+    void rb_insert_case1( N *node )
     {
       if( node->parent == nullptr ) // it is the root
         node->colour = BLACK;
@@ -420,7 +408,7 @@ class rbtree
         rb_insert_case2( node );
     }
 
-    void rb_insert_case2( node_t *node )
+    void rb_insert_case2( N *node )
     {
       if( node->parent->colour == BLACK )
         return; // the invariant is OK
@@ -428,14 +416,14 @@ class rbtree
         rb_insert_case3( node );
     }
 
-    void rb_insert_case3( node_t *node )
+    void rb_insert_case3( N *node )
     {
-      node_t *uncle = get_uncle( node );
+      N *uncle = get_uncle( node );
       if( uncle && uncle->colour == RED )
       {
         node->parent->colour = BLACK;
         uncle->colour = BLACK;
-        node_t *grandparent = get_grandparent( node );
+        N *grandparent = get_grandparent( node );
         grandparent->colour = RED;
         rb_insert_case1( grandparent );
       }
@@ -443,9 +431,9 @@ class rbtree
         rb_insert_case4( node );
     }
 
-    void rb_insert_case4( node_t *node )
+    void rb_insert_case4( N *node )
     {
-      node_t *grandparent = get_grandparent( node );
+      N *grandparent = get_grandparent( node );
 
       if( ( node == node->parent->right.get() ) && ( node->parent == grandparent->left.get() ) )
       {
@@ -461,9 +449,9 @@ class rbtree
       rb_insert_case5( node );
     }
 
-    void rb_insert_case5( node_t *node )
+    void rb_insert_case5( N *node )
     {
-      node_t *grandparent = get_grandparent( node );
+      N *grandparent = get_grandparent( node );
       node->parent->colour = BLACK;
       grandparent->colour = RED;
       if( node == node->parent->left.get() )
@@ -487,7 +475,7 @@ class rbtree
     }
 
     template<typename NODE>
-    node_t* get_sibling( NODE node )
+    N* get_sibling( NODE node )
     {
       if( !node && !node->parent )
         return nullptr;
@@ -507,7 +495,7 @@ class rbtree
     template<typename NODE>
     void rb_erase_case2( NODE node )
     {
-      node_t *sibling = get_sibling( node );
+      N *sibling = get_sibling( node );
       if( !sibling ) throw rb_invariant_error();
       if( sibling->colour == RED )
       {
@@ -525,7 +513,7 @@ class rbtree
     template<typename NODE>
     void rb_erase_case3( NODE node )
     {
-      node_t *sibling = get_sibling( node );
+      N *sibling = get_sibling( node );
       if( !sibling ) throw rb_invariant_error();
       colour_t sibling_left_colour = sibling->left ? sibling->left->colour : BLACK;
       colour_t sibling_right_colour = sibling->right ? sibling->right->colour : BLACK;
@@ -544,7 +532,7 @@ class rbtree
     template<typename NODE>
     void rb_erase_case4( NODE node )
     {
-      node_t *sibling = get_sibling( node );
+      N *sibling = get_sibling( node );
       if( !sibling ) throw rb_invariant_error();
       colour_t sibling_left_colour = sibling->left ? sibling->left->colour : BLACK;
       colour_t sibling_right_colour = sibling->right ? sibling->right->colour : BLACK;
@@ -563,7 +551,7 @@ class rbtree
     template<typename NODE>
     void rb_erase_case5( NODE node )
     {
-      node_t *sibling = get_sibling( node );
+      N *sibling = get_sibling( node );
       if( !sibling ) throw rb_invariant_error();
       colour_t sibling_left_colour = sibling->left ? sibling->left->colour : BLACK;
       colour_t sibling_right_colour = sibling->right ? sibling->right->colour : BLACK;
@@ -593,7 +581,7 @@ class rbtree
     template<typename NODE>
     void rb_erase_case6( NODE node )
     {
-      node_t *sibling = get_sibling( node );
+      N *sibling = get_sibling( node );
       if( !sibling ) throw rb_invariant_error();
       sibling->colour = node->parent->colour;
       node->parent->colour = BLACK;
@@ -609,11 +597,10 @@ class rbtree
       }
     }
 
-    std::unique_ptr<node_t> tree_root;
+    std::unique_ptr<N> tree_root;
     size_t tree_size;
 };
 
-template<typename K, typename V>
-std::unique_ptr< typename rbtree<K, V>::node_t > rbtree<K, V>::null_node;
-
+template<typename K, typename V, typename N>
+std::unique_ptr<N> rbtree<K, V, N>::null_node;
 #endif /* RBTREE_HH_ */
