@@ -10,7 +10,9 @@
 
 #include "rbtree.hh"
 
+#include <set>
 #include <memory>
+#include <vector>
 #include <exception>
 #include <algorithm>
 
@@ -62,6 +64,14 @@ class interval_tree : public rbtree< I, V, interval_node_t<I, V> >
 
     typedef typename rbtree<I, V, N>::accessor accessor;
 
+    struct less
+    {
+        bool operator() ( const accessor &x, const accessor &y) const
+        {
+          return x->low < y->low;
+        }
+    };
+
     virtual ~interval_tree()
     {
 
@@ -80,10 +90,10 @@ class interval_tree : public rbtree< I, V, interval_node_t<I, V> >
       this->erase_node( node );
     }
 
-    std::vector<accessor> query( I point )
+    std::set<accessor, less> query( I low, I high )
     {
-      std::vector<accessor> result;
-      query( point, this->tree_root, result );
+      std::set<accessor, less> result;
+      query( low, high, this->tree_root, result );
       return result;
     }
 
@@ -93,28 +103,29 @@ class interval_tree : public rbtree< I, V, interval_node_t<I, V> >
     using rbtree<I, V, N>::erase;
     using rbtree<I, V, N>::find;
 
-    static void query( I point, const std::unique_ptr<N> &node, std::vector<accessor> &result )
+    static bool overlaps( I low, I high, const N *node )
+    {
+      I s1 = low + high;
+      I d1 = high - low;
+      I s2 = node->low + node->high;
+      I d2 = node->high - node->low;
+      return abs( s2 - s1 ) < d1 + d2;
+    }
+
+    static void query( I low, I high, std::unique_ptr<N> &node, std::set<accessor, less> &result )
     {
       // base case
       if( !node ) return;
-
-      // the point is to the right of the rightmost point of any interval
-      if( p > node->max ) return;
-
-      // check this node
-      if( node->low <= p && node->high >= p )
-        result.push_back( accessor( node.get() ) );
-
-      // if p is to the left of the start of this interval,
-      // then it can't be in any child to the right
-      if( p < node->low )
-      {
-        query( point, node->left, result );
-        return;
-      }
-
-      // the only thing left is to check the right subtree
-      query( point, node->right, result );
+      // the interval is to the right of the rightmost point of any interval
+      if( low > node->max ) return;
+      // check if the interval overlaps with current node
+      if( overlaps( low, high, node.get() ))
+        result.insert( accessor( node.get() ) );
+      // check the left subtree
+      query( low, high, node->left, result );
+      // Do we need to check the right subtree?
+      if( high > node->low )
+        query( low, high, node->right, result);
     }
 
     void insert_into( I low, I high, const V &value, std::unique_ptr<N> &node, N *parent = nullptr )

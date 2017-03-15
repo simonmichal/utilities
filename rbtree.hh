@@ -171,6 +171,16 @@ class rbtree
           return *node;
         }
 
+        const N* operator->() const
+        {
+          return node;
+        }
+
+        const N& operator*() const
+        {
+          return *node;
+        }
+
         operator bool() const
         {
           return bool( node );

@@ -9,9 +9,7 @@
 #define RBTREE_TESTER_HH_
 
 #include "rbtree.hh"
-
 #include <unistd.h>
-
 #include <iostream>
 
 class rbtree_tester
@@ -54,7 +52,7 @@ class rbtree_tester
 
   private:
 
-    void print( const std::unique_ptr<rbtree<int, std::string>::node_t> &root, const std::string &indent = "" )
+    void print( const std::unique_ptr< node_t<int, std::string> > &root, const std::string &indent = "" )
     {
       if( !root ) return;
 
@@ -64,17 +62,17 @@ class rbtree_tester
       print( root->left, indent + "  " );
     }
 
-    static std::pair<bool, int> test_invariant( const std::unique_ptr<rbtree<int, std::string>::node_t> &root )
+    static std::pair<bool, int> test_invariant( const std::unique_ptr< node_t<int, std::string> > &root )
     {
       // base case
       if( !root )
         return std::make_pair( true, 0 );
 
       int black = 0;
-      if( root->colour == rbtree<int, std::string>::RED )
+      if( root->colour == RED )
       {
         // RED node cannot have RED children
-        if( ( root->left && root->left->colour == rbtree<int, std::string>::RED ) || ( root->right && root->right->colour == rbtree<int, std::string>::RED ) )
+        if( ( root->left && root->left->colour == RED ) || ( root->right && root->right->colour == RED ) )
           return std::make_pair( false, -1 );
       }
       else

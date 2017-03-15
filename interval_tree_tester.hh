@@ -32,6 +32,45 @@ class interval_tree_tester
       return test_interval_invariant( tree.tree_root );
     }
 
+    bool test_interval_query()
+    {
+      clear();
+
+      tree.insert( 5, 10, "(5, 10)" );
+      tree.insert( 1, 12, "(1, 12)" );
+      tree.insert( 2, 8, "(2, 8)" );
+      tree.insert( 15, 25, "(15, 25)" );
+      tree.insert( 8, 16, "(8, 16)" );
+      tree.insert( 14, 20, "(14, 20)" );
+      tree.insert( 18, 21, "(18, 21)" );
+
+      auto result = tree.query( 26, 28 );
+      if( result.size() != 0 ) return false;
+
+      result = tree.query( 12, 15 );
+      if( result.size() != 1 ) return false;
+
+      result = tree.query( 10, 12 );
+      if( result.size() != 2 ) return false;
+
+      result = tree.query( 18, 19 );
+      if( result.size() != 3 ) return false;
+
+      result = tree.query( 6, 9 );
+      if( result.size() != 4 ) return false;
+
+      result = tree.query( 7, 15 );
+      if( result.size() != 5 ) return false;
+
+      result = tree.query( 6, 16 );
+      if( result.size() != 6 ) return false;
+
+      result = tree.query( 0, 26 );
+      if( result.size() != 7 ) return false;
+
+      return true;
+    }
+
     void clear()
     {
       tree.clear();
