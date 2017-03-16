@@ -155,11 +155,11 @@ class rbtree
 
   public:
 
-    class accessor
+    class iterator
     {
       public:
 
-        accessor( N *node ) : node( node ) { }
+        iterator( N *node = 0 ) : node( node ) { }
 
         N* operator->()
         {
@@ -184,6 +184,34 @@ class rbtree
         operator bool() const
         {
           return bool( node );
+        }
+
+        iterator& operator++()
+        {
+          if( !node )
+            return *this;
+
+          if( node->right )
+          {
+            node = node->right.get();
+            while( node->left )
+              node = node->left.get();
+            return *this;
+          }
+
+          N *parent = node->parent;
+          while( parent && is_right( node ) )
+          {
+            node = parent;
+            parent = node->parent;
+          }
+          node = parent;
+          return *this;
+        }
+
+        bool operator!=( const iterator &itr )
+        {
+          return node != itr.node;
         }
 
       private:
@@ -211,16 +239,16 @@ class rbtree
       tree_root.reset();
     }
 
-    accessor find( const K &key )
+    iterator find( const K &key )
     {
       const std::unique_ptr<N> &n = find_in( key, tree_root );
-      return accessor( n.get() );
+      return iterator( n.get() );
     }
 
-    const accessor find( const K &key ) const
+    const iterator find( const K &key ) const
     {
       const std::unique_ptr<N> &n = find_in( key, tree_root );
-      return accessor( n.get() );
+      return iterator( n.get() );
     }
 
     size_t size() const
@@ -231,6 +259,23 @@ class rbtree
     bool empty() const
     {
       return !tree_root;
+    }
+
+    iterator begin()
+    {
+      N *node = tree_root.get();
+      if( !node ) return iterator();
+      while( node->left )
+      {
+        node = node->left.get();
+      }
+
+      return iterator( node );
+    }
+
+    iterator end()
+    {
+      return iterator();
     }
 
   protected:
@@ -608,7 +653,7 @@ class rbtree
     }
 
     std::unique_ptr<N> tree_root;
-    size_t tree_size;
+    size_t             tree_size;
 };
 
 template<typename K, typename V, typename N>

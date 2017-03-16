@@ -62,11 +62,11 @@ class interval_tree : public rbtree< I, V, interval_node_t<I, V> >
 
   public:
 
-    typedef typename rbtree<I, V, N>::accessor accessor;
+    typedef typename rbtree<I, V, N>::iterator iterator;
 
     struct less
     {
-        bool operator() ( const accessor &x, const accessor &y) const
+        bool operator() ( const iterator &x, const iterator &y) const
         {
           return x->low < y->low;
         }
@@ -90,9 +90,9 @@ class interval_tree : public rbtree< I, V, interval_node_t<I, V> >
       this->erase_node( node );
     }
 
-    std::set<accessor, less> query( I low, I high )
+    std::set<iterator, less> query( I low, I high )
     {
-      std::set<accessor, less> result;
+      std::set<iterator, less> result;
       query( low, high, this->tree_root, result );
       return result;
     }
@@ -112,15 +112,15 @@ class interval_tree : public rbtree< I, V, interval_node_t<I, V> >
       return abs( s2 - s1 ) < d1 + d2;
     }
 
-    static void query( I low, I high, std::unique_ptr<N> &node, std::set<accessor, less> &result )
+    static void query( I low, I high, std::unique_ptr<N> &node, std::set<iterator, less> &result )
     {
       // base case
       if( !node ) return;
       // the interval is to the right of the rightmost point of any interval
       if( low > node->max ) return;
-      // check if the interval overlaps with current node
+      // check if the interval overlaps fully with current node
       if( overlaps( low, high, node.get() ))
-        result.insert( accessor( node.get() ) );
+        result.insert( iterator( node.get() ) );
       // check the left subtree
       query( low, high, node->left, result );
       // Do we need to check the right subtree?

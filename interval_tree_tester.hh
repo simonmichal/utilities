@@ -27,6 +27,32 @@ class interval_tree_tester
       return test_rb_invariant( tree.tree_root ).first;
     }
 
+    bool test_rb_iterator()
+    {
+      tree.clear();
+
+      tree.insert( 0, 1, "0" );
+      tree.insert( 1, 2, "1" );
+      tree.insert( 2, 3, "2" );
+      tree.insert( 3, 4, "3" );
+      tree.insert( 4, 5, "4" );
+      tree.insert( 5, 6, "5" );
+      tree.insert( 6, 7, "6" );
+      tree.insert( 7, 8, "7" );
+      tree.insert( 8, 9, "8" );
+
+      int i = 0;
+      interval_tree<int, std::string>::iterator itr;
+      for( itr = tree.begin() ; itr != tree.end(); ++itr )
+      {
+        if( itr->low != i )
+          return false;
+        ++i;
+      }
+
+      return true;
+    }
+
     bool test_interval_invariant()
     {
       return test_interval_invariant( tree.tree_root );
