@@ -105,10 +105,10 @@ class interval_tree : public rbtree< I, V, interval_node_t<I, V> >
 
     static bool overlaps( I low, I high, const N *node )
     {
-      I s1 = low + high;
-      I d1 = high - low;
-      I s2 = node->low + node->high;
-      I d2 = node->high - node->low;
+      int64_t s1 = low + high;
+      int64_t d1 = high - low;
+      int64_t s2 = node->low + node->high;
+      int64_t d2 = node->high - node->low;
       return abs( s2 - s1 ) < d1 + d2;
     }
 
