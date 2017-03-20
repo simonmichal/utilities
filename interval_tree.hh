@@ -30,7 +30,7 @@ class interval_node_t
     public:
 
       interval_node_t( I low, I high, const V &value ) :
-        low( low ), high( high ), value( value ), key( low ), max( high ), colour( RED ), parent( nullptr ) { }
+        low( low ), high( high ), value( value ), key( this->low ), max( high ), colour( RED ), parent( nullptr ) { }
 
       const I low;
       const I high;
