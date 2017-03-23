@@ -237,6 +237,7 @@ class rbtree
     void clear()
     {
       tree_root.reset();
+      tree_size = 0;
     }
 
     iterator find( const K &key )
@@ -310,9 +311,21 @@ class rbtree
         // 1. look for the in-order successor
         // 2. replace the node with the in-order successor
         // 3. erase the in-order successor
+        N *n = node.get();
         std::unique_ptr<N> &successor = find_successor( node );
         swap_successor( node, successor );
-        erase_node( successor );
+        // we swapped the node with successor and the
+        // 'successor' unique pointer holds now the node
+        if( successor.get() == n )
+          erase_node( successor );
+        // otherwise the successor was the right child of node,
+        // hence node should be now the right child of 'node'
+        // unoique pointer
+        else if( node->right.get() == n )
+          erase_node( node->right );
+        // there are no other cases so anything else is wrong
+        else
+          throw std::logic_error( "Bad rbtree swap." );
         return;
       }
 

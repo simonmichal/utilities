@@ -55,7 +55,7 @@ class interval_tree_tester
 
     bool test_interval_invariant()
     {
-      return test_interval_invariant( tree.tree_root );
+      return test_invariant( tree.tree_root );
     }
 
     bool test_interval_query()
@@ -73,7 +73,7 @@ class interval_tree_tester
       auto result = tree.query( 26, 28 );
       if( result.size() != 0 ) return false;
 
-      result = tree.query( 12, 15 );
+      result = tree.query( 12, 14 );
       if( result.size() != 1 ) return false;
 
       result = tree.query( 10, 12 );
@@ -169,7 +169,7 @@ class interval_tree_tester
       return std::make_pair( true, l.second + black );
     }
 
-    static bool test_interval_invariant( const std::unique_ptr< interval_node_t<int, std::string> > &root )
+    static bool test_invariant( const std::unique_ptr< interval_node_t<int, std::string> > &root )
     {
       // base case
       if( !root )
@@ -188,7 +188,7 @@ class interval_tree_tester
         return false;
 
       // test children
-      return test_interval_invariant( root->left ) && test_interval_invariant( root->right );
+      return test_invariant( root->left ) && test_invariant( root->right );
     }
 
     interval_tree<int, std::string> tree;

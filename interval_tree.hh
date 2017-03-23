@@ -159,11 +159,23 @@ class interval_tree : public rbtree< I, V, interval_node_t<I, V> >
         // 1. look for the in-order successor
         // 2. replace the node with the in-order successor
         // 3. erase the in-order successor
+        N *n = node.get();
         std::unique_ptr<N> &successor = this->find_successor( node );
         this->swap_successor( node, successor );
         // we don't update max since in erase_node we
         // will do it after removing respective node
-        erase_node( successor );
+        // we swapped the node with successor and the
+        // 'successor' unique pointer holds now the node
+        if( successor.get() == n )
+          erase_node( successor );
+        // otherwise the successor was the right child of node,
+        // hence node should be now the right child of 'node'
+        // unoique pointer
+        else if( node->right.get() == n )
+          erase_node( node->right );
+        // there are no other cases so anything else is wrong
+        else
+          throw std::logic_error( "Bad rbtree swap." );
         return;
       }
 

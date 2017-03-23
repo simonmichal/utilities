@@ -23,7 +23,7 @@ class rbtree_tester
 
     bool test_invariant()
     {
-      return test_invariant( tree.tree_root ).first;
+      return TestInvariant( tree.tree_root ).first;
     }
 
     bool test_iterator()
