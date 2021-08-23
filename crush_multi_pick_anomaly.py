@@ -1,6 +1,7 @@
 '''
 Created on Feb 10, 2017
 
+@email: michal.simon@cern.ch
 @author: Simon Michal
 '''
 
